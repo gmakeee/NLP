@@ -2,3 +2,5 @@ fastapi
 uvicorn
 natasha
 pydantic
+setuptools
+pymorphy2-dicts-ru
