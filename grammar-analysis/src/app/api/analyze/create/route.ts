@@ -82,46 +82,47 @@ export async function POST(req: Request) {
     // 4. Prisma Transaction Implementation (Data Integrity)
     // Wrap User creation, Analysis creation, and RuleResult bulk insert cleanly.
     const savedAnalysis = await prisma.$transaction(async (tx) => {
-      // Create temporary MVP user if missing
-      const TEMP_EMAIL = "mvp-test@grammar.app";
-      const user = await tx.user.upsert({
-        where: { email: TEMP_EMAIL },
-        update: {},
-        create: { email: TEMP_EMAIL, role: "STUDENT" },
-      });
-
-      // Insert core Analysis record
-      const analysis = await tx.analysis.create({
-        data: {
-          content: nlpData.text,
-          rds: nlpData.rds,
-          car: nlpData.car,
-          gci: nlpData.gci,
-          status: "COMPLETED",
-          userId: user.id,
-        },
-      });
-
-      // Bulk insert nested parsed matches
-      if (nlpData.matches && nlpData.matches.length > 0) {
-        await tx.ruleResult.createMany({
-          data: nlpData.matches.map((match: any) => ({
-            analysisId: analysis.id,
-            ruleId: match.rule_id,
-            isCorrect: match.is_correct,
-            fragment: match.fragment,
-            errorNote: match.error_note,
-          })),
-        });
+      // Find a default class or create it
+      // In a real app we'd expect student_id in the request from authenticated dashboard
+      let testClass = await tx.class.findFirst();
+      if (!testClass) {
+        testClass = await tx.class.create({ data: { name: 'API Default Class' } });
       }
 
-      // Return fully hydrated result to the frontend
-      return (tx as any).analysis.findUnique({
-        where: { id: analysis.id },
-        include: {
-          ruleResults: true,
-          user: { select: { id: true, email: true } },
+      // Find or create default student for external API tests
+      const student = await tx.student.upsert({
+        where: {
+          full_name_birth_date_class_id: {
+            full_name: 'API Test Student',
+            birth_date: new Date('2010-01-01'),
+            class_id: testClass.id,
+          }
         },
+        update: {},
+        create: {
+          full_name: 'API Test Student',
+          birth_date: new Date('2010-01-01'),
+          class_id: testClass.id,
+        }
+      });
+
+      // Insert core AnalysisResult record
+      const analysisResult = await tx.analysisResult.create({
+        data: {
+          raw_text: nlpData.text || text,
+          metrics: {
+            rds: nlpData.rds,
+            car: nlpData.car,
+            gci: nlpData.gci,
+            matches: nlpData.matches || []
+          },
+          student_id: student.id,
+        },
+      });
+
+      return tx.analysisResult.findUnique({
+        where: { id: analysisResult.id },
+        include: { student: true },
       });
     });
 

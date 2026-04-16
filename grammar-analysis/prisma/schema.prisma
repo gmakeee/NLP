@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,64 +8,61 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ─── Enums ────────────────────────────────────────────────────────────────────
-
-enum Role {
-  STUDENT
+enum UserRole {
+  ADMIN
   TEACHER
 }
 
-enum AnalysisStatus {
-  PROCESSING
-  COMPLETED
-  FAILED
-}
-
-// ─── Models ───────────────────────────────────────────────────────────────────
-
 model User {
-  id        String     @id @default(cuid())
-  email     String     @unique
-  role      Role       @default(STUDENT)
-  analyses  Analysis[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password_hash String
+  role          UserRole
+  teacher_classes TeacherClass[]
 
   @@map("users")
 }
 
-model Analysis {
-  id          String         @id @default(cuid())
-  content     String         @db.Text
-  /// R-D-S score (0–100)
-  rds         Float?
-  /// C-A-R score (0–100)
-  car         Float?
-  /// G-C-I score (0–100)
-  gci         Float?
-  status      AnalysisStatus @default(PROCESSING)
-  userId      String
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ruleResults RuleResult[]
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+model Class {
+  id            String         @id @default(uuid())
+  name          String
+  teacher_classes TeacherClass[]
+  students        Student[]
 
-  @@index([userId])
-  @@index([status])
-  @@map("analyses")
+  @@map("classes")
 }
 
-model RuleResult {
-  id         String   @id @default(cuid())
-  analysisId String
-  analysis   Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
-  ruleId     String
-  isCorrect  Boolean  @default(false)
-  fragment   String?  @db.Text
-  errorNote  String?  @db.Text
-  createdAt  DateTime @default(now())
+model TeacherClass {
+  teacher_id String
+  class_id   String
 
-  @@index([analysisId])
-  @@index([ruleId])
-  @@map("rule_results")
+  teacher User  @relation(fields: [teacher_id], references: [id], onDelete: Cascade)
+  class   Class @relation(fields: [class_id], references: [id], onDelete: Cascade)
+
+  @@id([teacher_id, class_id])
+  @@map("teacher_classes")
+}
+
+model Student {
+  id               String           @id @default(uuid())
+  full_name        String
+  birth_date       DateTime
+  class_id         String
+  class            Class            @relation(fields: [class_id], references: [id])
+  analysis_results AnalysisResult[]
+
+  @@unique([full_name, birth_date, class_id])
+  @@map("students")
+}
+
+model AnalysisResult {
+  id         String   @id @default(uuid())
+  student_id String
+  raw_text   String   @db.Text
+  metrics    Json
+  created_at DateTime @default(now())
+
+  student Student @relation(fields: [student_id], references: [id], onDelete: Cascade)
+
+  @@map("analysis_results")
 }
