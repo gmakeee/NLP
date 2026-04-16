@@ -1,0 +1,74 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  STUDENT
+  TEACHER
+}
+
+enum AnalysisStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  role      Role       @default(STUDENT)
+  analyses  Analysis[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@map("users")
+}
+
+model Analysis {
+  id          String         @id @default(cuid())
+  content     String         @db.Text
+  /// R-D-S score (0–100)
+  rds         Float?
+  /// C-A-R score (0–100)
+  car         Float?
+  /// G-C-I score (0–100)
+  gci         Float?
+  status      AnalysisStatus @default(PROCESSING)
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ruleResults RuleResult[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("analyses")
+}
+
+model RuleResult {
+  id         String   @id @default(cuid())
+  analysisId String
+  analysis   Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  ruleId     String
+  isCorrect  Boolean  @default(false)
+  fragment   String?  @db.Text
+  errorNote  String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([analysisId])
+  @@index([ruleId])
+  @@map("rule_results")
+}
